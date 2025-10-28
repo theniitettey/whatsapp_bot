@@ -1,5 +1,9 @@
 import axios from "axios";
 import CONFIG from "../config";
+import {
+  isNewUser as storeIsNewUser,
+  markUserSeen as storeMarkUserSeen,
+} from "./userStore";
 
 const BASE_URL = `https://graph.facebook.com/v20.0/${CONFIG.PHONE_NUMBER_ID}/messages`;
 
@@ -22,6 +26,12 @@ async function sendTextMessage(to: string, textMessage: string) {
       },
     });
 
+    // Log successful response for debugging (helps diagnose loops)
+    console.log(
+      "➡️ WhatsApp text send response:",
+      response.status,
+      response.data
+    );
     return response.data;
   } catch (error: any) {
     console.error(
@@ -42,7 +52,7 @@ async function sendTemplateMessage(to: string) {
       to,
       type: "template",
       template: {
-        name: "hello_world", // Change to your approved template name
+        name: "hello_world",
         language: { code: "en_US" },
       },
     };
@@ -54,6 +64,12 @@ async function sendTemplateMessage(to: string) {
       },
     });
 
+    // Log successful response for debugging (helps diagnose loops)
+    console.log(
+      "➡️ WhatsApp template send response:",
+      response.status,
+      response.data
+    );
     return response.data;
   } catch (error: any) {
     console.error(
@@ -71,18 +87,31 @@ async function sendTemplateMessage(to: string) {
 const sentToUsers = new Set<string>(); // temporary store for demo
 
 async function sendMessage(to: string, textMessage: string) {
-  if (!sentToUsers.has(to)) {
+  if (storeIsNewUser(to)) {
     console.log(`🆕 New user detected (${to}) → Sending template...`);
     await sendTemplateMessage(to);
-    sentToUsers.add(to);
+    // persist in background; not critical to await here
+    void storeMarkUserSeen(to);
   } else {
     console.log(`💬 Returning user (${to}) → Sending text message...`);
     await sendTextMessage(to, textMessage);
   }
 }
 
+// Utility helpers for controller logic
+function isNewUser(to: string) {
+  return !sentToUsers.has(to);
+}
+
+function markUserSeen(to: string) {
+  sentToUsers.add(to);
+}
+
 export const WhatsappService = {
   sendMessage,
   sendTemplateMessage,
   sendTextMessage,
+  // re-export store helpers for controller usage
+  isNewUser: storeIsNewUser,
+  markUserSeen: storeMarkUserSeen,
 };

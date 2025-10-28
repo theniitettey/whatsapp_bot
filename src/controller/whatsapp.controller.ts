@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import CONFIG from "../config";
-import { WhatsappService, ApiService } from "../service";
+import { WhatsappService, ApiService, UserStore } from "../service";
+import { isProcessed, markProcessed } from "../service/processedStore";
 
 /**
  * Verifies webhook for WhatsApp setup
@@ -40,16 +41,40 @@ const handleIncomingMessage = async (
       return;
     }
 
+    console.log("📥 Incoming message payload:", message);
     const sender = message.from; // sender phone number (e.g., "233599835538")
     const text = message.text?.body || "";
 
+    // Deduplicate incoming message events by message ID to avoid loops
+    const messageId = message.id ?? message.message_id ?? message.mid ?? null;
+    if (messageId && isProcessed(messageId)) {
+      console.log(`↩️ Duplicate webhook for message ${messageId} — skipping`);
+      res.sendStatus(200);
+      return;
+    }
+    if (messageId) markProcessed(messageId);
+
     console.log(`📩 New message from ${sender}: "${text}"`);
 
-    // Optional: get a dynamic response from your external API
-    const reply = await ApiService.getAPIResponse(text, sender);
-
-    // Send message (auto-detects whether to use template or text)
-    await WhatsappService.sendMessage(sender, reply);
+    // If this is the user's first message, send a pre-approved template
+    // and do not call the external API. Otherwise, call the API to get
+    // a dynamic response and send it.
+    if (WhatsappService.isNewUser(sender)) {
+      // send template and mark user as seen so future messages hit the API
+      const messageBody = await WhatsappService.sendTemplateMessage(sender);
+      WhatsappService.markUserSeen(sender);
+      console.log(
+        `✅ Sent template to first-time user ${sender}:`,
+        messageBody
+      );
+    } else {
+      const reply = await ApiService.getAPIResponse(text, sender);
+      const messageBody = await WhatsappService.sendMessage(
+        sender,
+        reply.response || "Sorry, I couldn't process your request."
+      );
+      console.log(`✅Message body:`, messageBody);
+    }
 
     res.sendStatus(200);
   } catch (error: any) {
