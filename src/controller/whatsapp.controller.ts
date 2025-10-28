@@ -69,11 +69,25 @@ const handleIncomingMessage = async (
       );
     } else {
       const reply = await ApiService.getAPIResponse(text, sender);
-      const messageBody = await WhatsappService.sendMessage(
-        sender,
-        reply.response || "Sorry, I couldn't process your request."
-      );
-      console.log(`✅Message body:`, messageBody);
+      console.log(`🤖 External API reply for ${sender}:`, reply);
+
+      if (!reply) {
+        // External API failed; send a simple fallback/error message once
+        console.log(
+          `⚠️ External API failed for ${sender}; sending fallback message.`
+        );
+        const fallbackBody = await WhatsappService.sendTextMessage(
+          sender,
+          CONFIG.FALLBACK_MESSAGE
+        );
+        console.log(`✅ Sent fallback message to ${sender}:`, fallbackBody);
+      } else {
+        const messageBody = await WhatsappService.sendMessage(
+          sender,
+          reply.response || "Sorry, I couldn't process your request."
+        );
+        console.log(`✅Message body:`, messageBody);
+      }
     }
 
     res.sendStatus(200);

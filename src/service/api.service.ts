@@ -3,14 +3,14 @@ import CONFIG from "../config";
 import { setToken } from "./userStore";
 
 async function getAPIResponse(message: string, senderId: string) {
-  try {
-    const payload = {
-      message: message,
-      session_id: senderId,
-      budget: null,
-      token: null,
-    };
+  const payload = {
+    message: message,
+    session_id: senderId,
+    budget: null,
+    token: null,
+  };
 
+  try {
     const response = await axios.post(CONFIG.EXTERNAL_API_URL, payload);
     const data = response.data;
 
@@ -32,9 +32,13 @@ async function getAPIResponse(message: string, senderId: string) {
     }
 
     return data;
-  } catch (error) {
-    console.error("Error fetching API response:", error);
-    throw error;
+  } catch (err: any) {
+    // Single attempt failed — log and return null so caller decides what to send
+    console.warn(
+      "External API call failed (no retry):",
+      err?.response?.data || err.message || err
+    );
+    return null;
   }
 }
 
