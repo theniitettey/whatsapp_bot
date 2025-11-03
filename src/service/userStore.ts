@@ -1,5 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
+import bcrypt from "bcryptjs";
+import CONFIG from "../config";
 
 const DATA_DIR = path.resolve(process.cwd(), "data");
 const SEEN_FILE_PATH = path.join(DATA_DIR, "seen-users.json");
@@ -52,6 +54,23 @@ async function initStore() {
     }
 
     initialized = true;
+    // seed default accounts if not present
+    try {
+      const adminEmail = "admin@prestoghana.com";
+      const staffEmail = "staff@prestoghana.com";
+      if (!users.has(adminEmail)) {
+        const hash = await bcrypt.hash("AdminPass123!", 10);
+        await _setUser(adminEmail, { passwordHash: hash, role: "admin" });
+        console.log("Seeded default admin account:", adminEmail);
+      }
+      if (!users.has(staffEmail)) {
+        const hash = await bcrypt.hash("StaffPass123!", 10);
+        await _setUser(staffEmail, { passwordHash: hash, role: "staff" });
+        console.log("Seeded default staff account:", staffEmail);
+      }
+    } catch (err) {
+      console.error("Failed to seed default users:", err);
+    }
   } catch (err) {
     console.error("Failed to initialize user store:", err);
     // keep working with in-memory only if disk fails
