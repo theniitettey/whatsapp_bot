@@ -1,0 +1,22 @@
+{
+	"apps":[
+
+        {
+                "name":"myapp",
+                "script":"dist/server.js",
+                "watch":["views","public","routes"],
+                "env":{
+                        "NODE_ENV":"development"
+                },
+
+                "env.production":{
+                        "NODE_ENV":"production"
+                },
+                "log_date_format": "MM-DD-YYYY HH:mm Z",
+                "error_file": "myapp+err.log",
+                "out_file":"myapp_out.log"
+
+        }
+	]
+
+}
