@@ -17,9 +17,35 @@ app.use(bodyParser.json());
 const FRONTEND_ORIGIN = CONFIG.FRONTEND_ORIGIN;
 app.use(
   cors({
-    origin: FRONTEND_ORIGIN,
+    origin: (origin, callback) => {
+      // allow server-to-server or tools like curl (no origin)
+      if (!origin) return callback(null, true);
+
+      // allow configured frontend and localhost
+      if (origin === FRONTEND_ORIGIN || origin === "http://localhost:5173") {
+        return callback(null, true);
+      }
+      const DEV_TUNNEL_RE =
+        /^https?:\/\/(?:[A-Za-z0-9-]+\.)+devtunnels\.ms(?::\d+)?$/;
+      if (DEV_TUNNEL_RE.test(origin)) return callback(null, true);
+
+      // otherwise reject
+      return callback(new Error("Not allowed by CORS"));
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    // Some dev tunnels or proxies (or misconfigured clients) send additional
+    // headers like Access-Control-Allow-Origin; be permissive for dev but
+    // keep production tighter if needed.
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "Origin",
+      "Accept",
+      "Access-Control-Allow-Origin",
+      "Access-Control-Allow-Headers",
+    ],
+    credentials: true,
   })
 );
 

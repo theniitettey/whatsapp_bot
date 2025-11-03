@@ -39,15 +39,6 @@ async function main() {
       process.exit(3);
     }
   }
-  // Prevent storing masked/truncated sensitive values
-  const SENSITIVE = [/WHATSAPP_TOKEN/i, /AUTH_SECRET/i];
-  const MASKED_RE = /\.\.\.|\*{2,}/;
-  for (const sk of SENSITIVE) {
-    if (sk.test(key) && MASKED_RE.test(String(value ?? ""))) {
-      console.error(`Refusing to set masked/truncated value for sensitive key: ${key}`);
-      process.exit(4);
-    }
-  }
   const envPath = path.join(process.cwd(), ".env");
   const env = await readEnvFile(envPath);
   env[key] = value ?? "";
