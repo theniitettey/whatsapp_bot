@@ -5,24 +5,38 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "npm run build && node dist/server.js",
+    "start": "npm run build:all && node dist/server.js",
     "build": "tsc",
-    "dev": "nodemon --watch src --ext ts --exec \"ts-node\" src/server.ts"
+    "build:frontend": "npm --prefix frontend run build",
+    "build:all": "npm run build && npm run build:frontend",
+    "dev": "nodemon --watch src --ext ts --exec \"ts-node\" src/server.ts",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:all": "concurrently \"npm run dev\" \"npm run dev:frontend\"",
+    "start:frontend": "npm --prefix frontend run preview",
+    "start:all": "concurrently \"npm run start\" \"npm run start:frontend\"",
+    "env:set": "ts-node ./scripts/set-env.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
     "axios": "^1.13.0",
+    "bcryptjs": "^3.0.3",
     "body-parser": "^2.2.0",
+    "cors": "^2.8.5",
     "dotenv": "^17.2.3",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/body-parser": "^1.19.6",
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.5",
     "@types/node": "^24.9.1",
+    "concurrently": "^8.2.0",
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
