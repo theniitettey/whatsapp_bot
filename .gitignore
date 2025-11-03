@@ -5,3 +5,5 @@ logs/
 *.log
 .DS_Store
 data/
+*.swp
+.vscode/
