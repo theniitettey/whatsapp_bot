@@ -1,106 +1,170 @@
 import { Request, Response } from "express";
-import CONFIG from "../config";
-import { WhatsappService, ApiService, UserStore } from "../service";
+import { ApiService, UserStore, WhatsappService } from "../service";
+import logger from "../lib/logger";
 import { isProcessed, markProcessed } from "../service/processedStore";
 
 /**
- * Verifies webhook for WhatsApp setup
+ * Handles incoming WhatsApp messages and replies automatically using the
+ * centralized WhatsappService (which handles Ultramsg details).
  */
-const verifyWebhook = (req: Request, res: Response): void => {
-  const mode = req.query["hub.mode"];
-  const token = req.query["hub.verify_token"];
-  const challenge = req.query["hub.challenge"];
+const extractIncoming = (body: any) => {
+  // Handles multiple webhook shapes: Facebook Graph, Ultramsg, or simple forwarders.
+  // Return { sender, text, id } or null if no message found.
 
-  if (mode && token) {
-    if (mode === "subscribe" && token === CONFIG.VERIFY_TOKEN) {
-      console.log("✅ WEBHOOK_VERIFIED");
-      res.status(200).send(challenge);
-    } else {
-      res.sendStatus(403);
+  // 1) Ultramsg webhook shape (newer): { event_type, instanceId, data: { id, sid, from, body, ... } }
+  const data = body?.data ?? null;
+  if (data && typeof data === "object") {
+    const rawFrom =
+      data.from || data.from_number || data.sender || data.author || null;
+    // normalize sender: strip any @... suffix (e.g. 233599835538@c.us -> 233599835538)
+    const sender =
+      typeof rawFrom === "string" ? rawFrom.split("@")[0] : rawFrom;
+    const text = data.body || data.text || data.message || "";
+    const id = data.id ?? data.sid ?? data.messageId ?? null;
+    const fromMe = data.fromMe === true || data.fromMe === "true";
+    const self = data.self === true || data.self === "true";
+    const eventType = body?.event_type ?? null;
+    if (sender) {
+      return { sender, text, id, fromMe, self, eventType };
     }
-  } else {
-    res.sendStatus(400);
   }
+
+  // 2) Graph API shape: { entry: [ { changes: [ { value: { messages: [ ... ] } } ] } ] }
+  const entry = body?.entry?.[0];
+  const changes = entry?.changes?.[0];
+  const graphMsg = changes?.value?.messages?.[0];
+  if (graphMsg) {
+    return {
+      sender: graphMsg.from,
+      text: graphMsg.text?.body || graphMsg.body || "",
+      id: graphMsg.id ?? graphMsg.message_id ?? graphMsg.mid ?? null,
+      fromMe: false,
+      self: false,
+      eventType: null,
+    };
+  }
+
+  // 2) Ultramsg shape (or similar): { messages: [ { from, body, id } ] }
+  const ul = body?.messages?.[0] || body?.message || null;
+  if (ul) {
+    return {
+      sender: ul.from || ul.from_number || ul.sender || null,
+      text: ul.body || ul.text || ul.payload || "",
+      id: ul.id ?? ul.messageId ?? null,
+      fromMe: ul.fromMe === true || ul.fromMe === "true",
+      self: ul.self === true || ul.self === "true",
+      eventType: body?.event_type ?? null,
+    };
+  }
+
+  // 3) Simple forwarder: { from, text }
+  if (body?.from && (body?.text || body?.body)) {
+    return {
+      sender: body.from,
+      text: body.text || body.body || "",
+      id: body.id ?? null,
+      fromMe: false,
+      self: false,
+      eventType: null,
+    };
+  }
+
+  return null;
 };
 
-/**
- * Handles incoming WhatsApp messages and replies automatically
- */
 const handleIncomingMessage = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
-    const entry = req.body.entry?.[0];
-    const changes = entry?.changes?.[0];
-    const message = changes?.value?.messages?.[0];
-
-    if (!message) {
-      // WhatsApp might send status updates or empty notifications
+    logger.info("Received incoming webhook", {
+      size: JSON.stringify(req.body).length,
+    });
+    const msg = extractIncoming(req.body);
+    if (!msg) {
       res.sendStatus(200);
       return;
     }
 
-    console.log("📥 Incoming message payload:", message);
-    const sender = message.from; // sender phone number (e.g., "233599835538")
-    const text = message.text?.body || "";
+    const { sender, text, id, fromMe, self, eventType } = msg as any;
+    if (!sender) {
+      res.sendStatus(200);
+      return;
+    }
+
+    logger.debug("Incoming message payload:", msg);
+
+    // Use the provider's event type to decide whether to act. Accept a small
+    // whitelist of actionable event types (providers differ). If an explicit
+    // event_type is present and NOT in the whitelist, acknowledge with 200
+    // and skip processing.
+    // Only treat provider 'message_received' as actionable. Some providers
+    // use 'message_create' for outgoing messages we send back, so we don't
+    // want to process those. If eventType is null (e.g. Graph shape) we
+    // continue to process so simple forwarders still work.
+    const ACTIONABLE = new Set(["message_received"]);
+    if (eventType != null && !ACTIONABLE.has(String(eventType))) {
+      logger.info(`Ignoring non-actionable event_type='${eventType}'`);
+      res.sendStatus(200);
+      return;
+    }
 
     // Deduplicate incoming message events by message ID to avoid loops
-    const messageId = message.id ?? message.message_id ?? message.mid ?? null;
+    const messageId = id ?? null;
     if (messageId && isProcessed(messageId)) {
-      console.log(`↩️ Duplicate webhook for message ${messageId} — skipping`);
+      logger.debug(`Duplicate webhook for message ${messageId} — skipping`);
       res.sendStatus(200);
       return;
     }
-    if (messageId) markProcessed(messageId);
+    if (messageId) await markProcessed(messageId);
 
-    console.log(`📩 New message from ${sender}: "${text}"`);
+    logger.info(`New message from ${sender}`);
 
-    // If this is the user's first message, send a pre-approved template
-    // and do not call the external API. Otherwise, call the API to get
-    // a dynamic response and send it.
-    if (WhatsappService.isNewUser(sender)) {
-      // send template and mark user as seen so future messages hit the API
-      const messageBody = await WhatsappService.sendTemplateMessage(sender);
-      WhatsappService.markUserSeen(sender);
-      console.log(
-        `✅ Sent template to first-time user ${sender}:`,
-        messageBody
-      );
-    } else {
-      const reply = await ApiService.getAPIResponse(text, sender);
-      console.log(`🤖 External API reply for ${sender}:`, reply);
-
-      if (!reply) {
-        // External API failed; send a simple fallback/error message once
-        console.log(
-          `⚠️ External API failed for ${sender}; sending fallback message.`
-        );
-        const fallbackBody = await WhatsappService.sendTextMessage(
-          sender,
-          CONFIG.FALLBACK_MESSAGE
-        );
-        console.log(`✅ Sent fallback message to ${sender}:`, fallbackBody);
-      } else {
-        const messageBody = await WhatsappService.sendMessage(
-          sender,
-          reply.response || "Sorry, I couldn't process your request."
-        );
-        console.log(`✅Message body:`, messageBody);
-      }
+    // Template-first flow
+    if (UserStore.isNewUser(sender)) {
+      logger.info(`First time from ${sender} — sending template`);
+      const templateResp = await WhatsappService.sendTemplateMessage(sender);
+      void UserStore.markUserSeen(sender);
+      logger.info(`Template sent to ${sender}`);
+      res.sendStatus(200);
+      return;
     }
 
+    // Otherwise ask external API and forward reply (or fallback)
+    const reply = await ApiService.getAPIResponse(text, sender);
+    logger.debug(`External API reply for ${sender}:`, reply);
+
+    if (!reply) {
+      const fallback =
+        process.env.FALLBACK_MESSAGE || "Sorry, something went wrong.";
+      const fallbackResp = await WhatsappService.sendTextMessage(
+        sender,
+        fallback
+      );
+      logger.info(`Sent fallback to ${sender}`);
+      res.sendStatus(200);
+      return;
+    }
+
+    const outbound =
+      reply.response || reply.text || reply.message || String(reply);
+    const outboundResp = await WhatsappService.sendTextMessage(
+      sender,
+      outbound
+    );
+    logger.info(`Sent reply to ${sender}`);
     res.sendStatus(200);
+    return;
   } catch (error: any) {
     console.error(
       "❌ Error handling incoming message:",
-      error.response?.data || error.message
+      error.response?.data || error.message || error
     );
     res.sendStatus(500);
+    return;
   }
 };
 
 export const WhatsappController = {
-  verifyWebhook,
   handleIncomingMessage,
 };

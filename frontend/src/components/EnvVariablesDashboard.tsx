@@ -28,6 +28,7 @@ import { useTheme } from "./ThemeProvider";
 import { Textarea } from "./ui/textarea";
 import { PrestoQLogo } from "./PrestoQLogo";
 import { ApiStatusIndicator } from "./ApiStatusIndicator";
+import NotificationsPanel from "./NotificationsPanel";
 import CONFIG from "../config";
 
 interface EnvVariable {
@@ -317,6 +318,9 @@ export function EnvVariablesDashboard({
           {/* API Status Indicator */}
           <div className="mb-6">
             <ApiStatusIndicator status={apiStatus} />
+            <div className="mt-4">
+              <NotificationsPanel token={token} />
+            </div>
           </div>
 
           {/* Search and Add */}

@@ -1,6 +1,8 @@
 import axios from "axios";
 import CONFIG from "../config";
 import { setToken } from "./userStore";
+import { text } from "body-parser";
+import { response } from "express";
 
 async function getAPIResponse(message: string, senderId: string) {
   const payload = {
@@ -32,6 +34,16 @@ async function getAPIResponse(message: string, senderId: string) {
     }
 
     return data;
+    // const mockResponse = {
+    //   message: "This is a mock response from the external API.",
+    //   reply: message,
+    //   text: message,
+    //   response: "This is a mock response from the external API.",
+    //   session_id: senderId,
+    //   budget: 100,
+    //   token: "  mock_token_12345",
+    // };
+    // return mockResponse;
   } catch (err: any) {
     // Single attempt failed — log and return null so caller decides what to send
     console.warn(

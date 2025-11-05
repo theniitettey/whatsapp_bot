@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import bcrypt from "bcryptjs";
 import CONFIG from "../config";
+import logger from "../lib/logger";
 
 const DATA_DIR = path.resolve(process.cwd(), "data");
 const SEEN_FILE_PATH = path.join(DATA_DIR, "seen-users.json");
@@ -61,18 +62,18 @@ async function initStore() {
       if (!users.has(adminEmail)) {
         const hash = await bcrypt.hash("AdminPass123!", 10);
         await _setUser(adminEmail, { passwordHash: hash, role: "admin" });
-        console.log("Seeded default admin account:", adminEmail);
+        logger.info("Seeded default admin account:", adminEmail);
       }
       if (!users.has(staffEmail)) {
         const hash = await bcrypt.hash("StaffPass123!", 10);
         await _setUser(staffEmail, { passwordHash: hash, role: "staff" });
-        console.log("Seeded default staff account:", staffEmail);
+        logger.info("Seeded default staff account:", staffEmail);
       }
     } catch (err) {
       console.error("Failed to seed default users:", err);
     }
   } catch (err) {
-    console.error("Failed to initialize user store:", err);
+    logger.error("Failed to initialize user store:", err);
     // keep working with in-memory only if disk fails
   }
 }
@@ -99,9 +100,10 @@ async function markUserSeen(phone: string): Promise<void> {
         JSON.stringify([...seen], null, 2),
         "utf8"
       );
+      logger.info("Marking user seen:", phone);
     }
   } catch (err) {
-    console.error("Failed to persist seen user:", err);
+    logger.error("Failed to persist seen user:", err);
   }
 }
 
@@ -124,9 +126,22 @@ async function _setUser(phone: string, record: UserRecord): Promise<void> {
       JSON.stringify(Object.fromEntries(users), null, 2),
       "utf8"
     );
+    logger.debug("Persisted user record for:", phone);
   } catch (err) {
-    console.error("Failed to persist user record:", err);
+    logger.error("Failed to persist user record:", err);
   }
+}
+
+/** Return a snapshot array of seen users (phone numbers) */
+function listSeenUsers(): string[] {
+  if (!initialized) void initStore();
+  return [...seen];
+}
+
+/** Return a snapshot object of user accounts */
+function listUsers(): Record<string, UserRecord> {
+  if (!initialized) void initStore();
+  return Object.fromEntries(users);
 }
 
 function isTokenExpired(phone: string): boolean {
@@ -168,4 +183,7 @@ export {
   isTokenExpired,
   setToken,
   clearToken,
+  // lists
+  listSeenUsers,
+  listUsers,
 };

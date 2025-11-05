@@ -7,6 +7,7 @@ import cors from "cors";
 import whatsappRoutes from "./routes/whatsapp.route";
 import authRoutes from "./routes/auth.route";
 import envRoutes from "./routes/env.route";
+import notificationsRoutes from "./routes/notifications.route";
 
 const app: Express = express();
 
@@ -22,11 +23,19 @@ app.use(
       if (!origin) return callback(null, true);
 
       // allow configured frontend and localhost
-      if (origin === FRONTEND_ORIGIN || origin === "http://localhost:5173") {
+      if (
+        origin === FRONTEND_ORIGIN ||
+        origin === "http://localhost:5173" ||
+        origin === "http://localhost:5174"
+      ) {
         return callback(null, true);
       }
       const DEV_TUNNEL_RE =
         /^https?:\/\/(?:[A-Za-z0-9-]+\.)+devtunnels\.ms(?::\d+)?$/;
+
+      const ULTRAMSG_API_RE = /^https?:\/\/api\.ultramsg\.com(?::\d+)?$/;
+
+      if (ULTRAMSG_API_RE.test(origin)) return callback(null, true);
       if (DEV_TUNNEL_RE.test(origin)) return callback(null, true);
 
       // otherwise reject
@@ -54,6 +63,12 @@ app.use("/api/whatsapp", whatsappRoutes);
 // auth and env routes
 app.use("/api/auth", authRoutes);
 app.use("/api/env", envRoutes);
+// notifications
+app.use("/api/notifications", notificationsRoutes);
+
+app.get("/", (req: Request, res: Response) => {
+  res.send("Presto WhatsApp Bot API is running.");
+});
 
 // NOTE: frontend is served separately (dev: Vite dev server, prod: static host or
 // `npm --prefix frontend run preview`). We purposely do NOT serve the frontend

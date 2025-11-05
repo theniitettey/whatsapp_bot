@@ -4,101 +4,70 @@ import {
   isNewUser as storeIsNewUser,
   markUserSeen as storeMarkUserSeen,
 } from "./userStore";
+import logger from "../lib/logger";
 
-const BASE_URL = `https://graph.facebook.com/v20.0/${CONFIG.PHONE_NUMBER_ID}/messages`;
+const BASE_URL = `https://api.ultramsg.com/${CONFIG.ULTRAMSG_INSTANCE_ID}/messages/chat`;
 
-/**
- * Sends a plain text message to a user.
- */
 async function sendTextMessage(to: string, textMessage: string) {
   try {
-    const payload = {
-      messaging_product: "whatsapp",
-      to,
-      type: "text",
-      text: { body: textMessage },
-    };
-
-    const response = await axios.post(BASE_URL, payload, {
-      headers: {
-        Authorization: `Bearer ${CONFIG.WHATSAPP_TOKEN}`,
-        "Content-Type": "application/json",
-      },
+    const payload = { token: CONFIG.ULTRAMSG_TOKEN, to, body: textMessage };
+    const params = new URLSearchParams();
+    Object.entries(payload).forEach(([k, v]) => params.append(k, String(v)));
+    const response = await axios.post(BASE_URL, params.toString(), {
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
     });
-
-    // Log successful response for debugging (helps diagnose loops)
-    console.log(
-      "➡️ WhatsApp text send response:",
-      response.status,
-      response.data
-    );
+    logger.info("Ultramsg text send response:", response.status, response.data);
     return response.data;
-  } catch (error: any) {
-    console.error(
-      "❌ Error sending text message:",
-      error.response?.data || error.message
+  } catch (err: any) {
+    logger.error(
+      "Error sending text message:",
+      err.response?.data || err.message
     );
-    throw error;
   }
 }
 
-/**
- * Sends a pre-approved template message to initiate chat with a new user.
- */
 async function sendTemplateMessage(to: string) {
   try {
     const payload = {
-      messaging_product: "whatsapp",
+      token: CONFIG.ULTRAMSG_TOKEN,
       to,
-      type: "template",
-      template: {
-        name: "hello_world",
-        language: { code: "en_US" },
-      },
+      body: "Hello welcome to PrestoQ!",
     };
-
-    const response = await axios.post(BASE_URL, payload, {
-      headers: {
-        Authorization: `Bearer ${CONFIG.WHATSAPP_TOKEN}`,
-        "Content-Type": "application/json",
-      },
+    const params = new URLSearchParams();
+    Object.entries(payload).forEach(([k, v]) => params.append(k, String(v)));
+    const response = await axios.post(BASE_URL, params.toString(), {
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
     });
-
-    // Log successful response for debugging (helps diagnose loops)
-    console.log(
-      "➡️ WhatsApp template send response:",
+    logger.info(
+      "Ultramsg template send response:",
       response.status,
       response.data
     );
     return response.data;
-  } catch (error: any) {
-    console.error(
-      "❌ Error sending template message:",
-      error.response?.data || error.message
+  } catch (err: any) {
+    logger.error(
+      "Error sending template message:",
+      err.response?.data || err.message
     );
-    throw error;
+    throw err;
   }
 }
 
-/**
- * Determines whether to send a template or text message based on user state.
- * (For now, you can mock user existence with a simple in-memory store or DB later.)
- */
-const sentToUsers = new Set<string>(); // temporary store for demo
+const sentToUsers = new Set<string>();
 
 async function sendMessage(to: string, textMessage: string) {
   if (storeIsNewUser(to)) {
-    console.log(`🆕 New user detected (${to}) → Sending template...`);
-    await sendTemplateMessage(to);
-    // persist in background; not critical to await here
+    logger.info(`New user detected (${to}) → sending template`);
+    const resp = await sendTemplateMessage(to);
     void storeMarkUserSeen(to);
+    return resp;
   } else {
-    console.log(`💬 Returning user (${to}) → Sending text message...`);
-    await sendTextMessage(to, textMessage);
+    logger.debug(`Returning user (${to}) → sending text message`);
+    const resp = await sendTextMessage(to, textMessage);
+    return resp;
   }
 }
 
-// Utility helpers for controller logic
 function isNewUser(to: string) {
   return !sentToUsers.has(to);
 }
@@ -111,7 +80,6 @@ export const WhatsappService = {
   sendMessage,
   sendTemplateMessage,
   sendTextMessage,
-  // re-export store helpers for controller usage
   isNewUser: storeIsNewUser,
   markUserSeen: storeMarkUserSeen,
 };

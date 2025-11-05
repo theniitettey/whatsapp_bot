@@ -4,7 +4,7 @@ import { WhatsappService } from "../service/whatsapp.service";
 
 const router: Router = Router();
 
-router.get("/webhook", WhatsappController.verifyWebhook);
+// Incoming webhook POSTs from Ultramsg / forwarders
 router.post("/webhook", WhatsappController.handleIncomingMessage);
 router.post("/send", async (req, res) => {
   try {

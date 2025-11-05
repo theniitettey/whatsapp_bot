@@ -12,15 +12,15 @@ const ENV_PATH = path.join(process.cwd(), ".env");
 // to be modified via the API. Those should be managed via deployment config
 // or the CLI with caution. Keep only application-level keys here.
 const ALLOWED_KEYS = new Set([
-  "WHATSAPP_TOKEN",
-  "PHONE_NUMBER_ID",
-  "VERIFY_TOKEN",
+  "ULTRAMSG_TOKEN",
+  "ULTRAMSG_INSTANCE_ID",
   "EXTERNAL_API_URL",
   "FALLBACK_MESSAGE",
   "AUTH_SECRET",
+  "FRONTEND_ORIGIN",
 ]);
 
-const SENSITIVE_KEYS = new Set(["WHATSAPP_TOKEN", "AUTH_SECRET"]);
+const SENSITIVE_KEYS = new Set(["ULTRAMSG_TOKEN", "AUTH_SECRET"]);
 
 async function readEnvFile() {
   try {
