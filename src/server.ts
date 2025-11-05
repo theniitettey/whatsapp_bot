@@ -3,9 +3,10 @@ import CONFIG from "./config";
 import logger from "./lib/logger";
 
 const PORT = CONFIG.PORT;
+const HOST = "0.0.0.0";
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`Server is running on http://${HOST}:${PORT}`);
 });
 
 console.log("✅ Server file loaded");
