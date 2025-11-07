@@ -120,18 +120,16 @@ const handleIncomingMessage = async (
 
     logger.info(`New message from ${sender}`);
 
-    // Template-first flow
+    // Template-first handled by the external API: always forward the
+    // incoming event to the ApiService. For new users we mark them seen
+    // and let the API decide whether to return a welcome/template message.
     if (UserStore.isNewUser(sender)) {
-      logger.info(`First time from ${sender} — sending template`);
-      const templateResp = await WhatsappService.sendTemplateMessage(sender);
+      logger.info(`First time from ${sender} — delegating to ApiService`);
       void UserStore.markUserSeen(sender);
-      logger.info(`Template sent to ${sender}`);
-      res.sendStatus(200);
-      return;
     }
 
-    // Otherwise ask external API and forward reply (or fallback)
-    const reply = await ApiService.getAPIResponse(text, sender);
+    // Ask external API and forward reply (or fallback)
+    const reply = await ApiService.getAPIResponse(text || "", sender);
     logger.debug(`External API reply for ${sender}:`, reply);
 
     if (!reply) {
