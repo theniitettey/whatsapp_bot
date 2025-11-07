@@ -31,7 +31,7 @@ async function sendTemplateMessage(to: string) {
     const payload = {
       token: CONFIG.ULTRAMSG_TOKEN,
       to,
-      body: "Hello welcome to PrestoQ!",
+      body: "Sup Bossu!💬 You get any money move for me?💰",
     };
     const params = new URLSearchParams();
     Object.entries(payload).forEach(([k, v]) => params.append(k, String(v)));
